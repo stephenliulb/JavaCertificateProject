@@ -1,0 +1,262 @@
+-------------------------------------------------------------------------------                                   
+                            User Guide For GUI Client And Database Server
+                                                     Author: Stephen Liu
+                                                     Date: 2024/02/01
+-------------------------------------------------------------------------------
+This is user guide for new URLyBird database application to allow CSRs to 
+generate a list of accomodations that match a customers' criteria and allow 
+the user to book a selected record,updating the database file accordingly.
+
+It also includes how to install the application and how to start the application
+at different work modes.
+
+--------------------------------------------------------------------------------
+Table of Contents
+
+1.Installation
+2.Start up application
+3.Configuration file
+4.GUI layout
+5.Search data
+6.Update data
+7.Logger configuration
+8.Notes
+--------------------------------------------------------------------------------
+
+   
+1.Installation
+==============
+* Get assignment jar file:'scjda-sr5367829.jar',and copy it to your 
+  destination directory(for example, c:\scjd) 
+* Go to your destination directory and unzip the jar file:
+   jar -xvf scjda-sr5367829.jar
+* Done.
+
+
+2.Start up application
+=======================
+  * The format of start command is as following:
+     java -jar <path_and_filename> [<mode>]
+  
+  * The application has three working modes: "alone","network", "server".
+    - "alone" means that the application directly access the local database file; 
+    - "network" means that database server is running in remote machine(or 
+       in local machine but different JVM) and the clients use network facilities 
+       to access the remote database;
+    - "server" means that the application plays as the role of database server.
+    
+  * The configuration file "stephen.properties" in current working directory
+     will be used during application startup if it is existed. 
+       - If all parameters in the file "stephen.properties" are valid for a 
+         specific application work mode,the application will start by using the
+         persisted configuration values.
+         
+       - If the file "stephen.properties" doesn't exist or some parameters in
+         this file are invalid for a specific work mode, uses can specify
+         the appropriate configuration parameters via configuration GUI; the file 
+         "stephen.properties" will be created or updated to persist these 
+         configuration values.  	
+
+  * Start application as alone mode    
+      >cd {your_destination_path}  (for example,cd c:\scjd)
+      >java -jar runme.jar alone
+       
+      First time, no data will show up on the GUI because database file isn't 
+      set. Users can choose the menu 'Configuration->Set' and a configuration dialog
+      will pop up to let users set database data file. All configuration 
+      information will be persisted into the file "stephen.properties".
+      
+      When the database is successful connected, the status panel at the bottom of GUI
+      shows connection to local database. 
+  
+  * Start application as network mode    
+      >cd {your_destination_path}  (for example,cd c:\scjd)
+      >java -jar runme.jar
+         
+      First time, no data will show up on the GUI because database server address
+      and server port number aren't set. Users can choose the menu 'Configuration->Set' 
+      and a configuration dialog will pop up to let users set database server address
+      and port number. All configuration information will be persisted into the file 
+      "stephen.properties".
+      
+      When the database is successful connected, the status panel at the bottom of GUI
+      shows connection to remote database server.
+      
+   * Start application as server mode
+      >cd {your_destination_path}  (for example, cd c:\scjd)
+      >java -jar runme.jar server
+
+      First time, a configuration GUI dialog will pop up to let users input database
+      server port number and database file location.All configuration information will 
+      be persisted into the file "stephen.properties". But if database server fails
+      to start up due to the wrong configuration parameters, all these wrong info in the file 
+      "stephen.properties" will be cleaned up before the server exited.
+      
+      When database server correctly started, the server port number will be printed 
+	  into console.
+
+3.Configuration file format
+===========================
+  The configuration file is called "stephen.properties", which is located
+  in current working directory if existed. The file will persist the configuration 
+  parameters between runs of the program.
+  
+  The format of configuration information are pairs of key and value.
+  
+  * For alone mode, the configuration parameters are as following:
+    - MODE: working mode of the application; its value is "alone".
+	- DATAFILE: database data file path where data will be stored.
+	for example on Window platform:
+	   MODE=alone
+	   DATAFILE=C\:\\scjd\\db-1x1.db
+  
+  * For network mode, the configuration parameters are as following:
+    - MODE: working mode of the application; its value is "network".
+    - SERVER: remote database server address(host name or IP ).
+	- PORT: remote database server port number. Application default port is 8899.
+	for example:
+	   MODE=network
+	   SERVER=dbserver.my.com
+	   PORT=8899	
+  
+  * For server mode, the configuration parameters are as following:
+    - MODE: working mode of the application; its value is "server".
+    - PORT: database server port number on which listening incoming requests. Application default port is 8899.
+    - DATAFILE: database data file path where database server will persist data.
+    for example:
+       MODE=server
+	   PORT=8899
+	   DATAFILE=C\:\\scjd\\db-1x1.db
+
+4.GUI layout
+============
+
+The GUI of the application client is composed by four parts:
+  * Menu bar
+    There are three menus: 'File','Configuration' and 'Help'.
+    
+  * Search Panel
+    It helps users construct searching condition to search database.
+    
+  * JTable
+    Display the data returned from database based on search condition.
+     
+  * Status Panel
+    It indicates the connecting database is in local or remote site. 
+
+This is the skeleton of GUI layout:
+-----------------------------------------------
+| File  Configuration  Help                   |    <--- Menu
+-----------------------------------------------
+| Search condition                            |
+|   Name     And/Or   City                    |    <---Search Panel
+-----------------------------------------------
+|                                             |
+|                                             |
+|                                             |
+|             Data display area               |    <--- JTable
+|                                             |
+|                                             |
+|                                             |
+----------------------------------------------
+|Indicator of database location               |    <--- Status Panel
+----------------------------------------------
+
+5.Search data
+=============
+Currently users search data from database based on the combination of hotel name and/or city name.
+
+There are several combinations of hotel name and city name and these combination will get 
+different result from database. User can use search panel on GUI to construct the search
+condition.
+
+In the GUI, empty hotel name means matching any hotel name;empty city name means matching any city. 
+From this point, empty value is similar like wild char '*'.
+
+There are different combination scenarios:
+  * 1 (empty hotel Name) AND/OR (empty City ) 
+        -  retrieve all records in the database.
+  * 2 (empty hotel Name) AND (Specific city name) 
+        -  retrieve all hotels for a specific city.  
+  * 3 (empty hotel Name) OR (Specific city name) 
+        -  retrieve all records in the database.
+  * 4 (specific hotel Name) AND (empty city name) 
+        -  retrieve all hotels with a specific name in all cities.
+  * 5 (specific hotel Name) OR (empty city name) 
+        -  retrieve all records in the database.
+  
+  * 6 (specific hotel Name) OR (Specific city name) 
+        -  retrieve the records which hotel name is the specific hotel name or which city name is the specific city name.                                
+       for example:
+          Search condition: (name=Palace) OR ( city=Smallville)
+          Search Result: [Palace,Smallville,2,Y,$150.00,2005/07/27, ]
+                         [Excelsior,Smallville,4,Y,$230.00,2003/02/05, ]	
+                         [Palace,Whoville,6,N,$110.00,2005/09/11, ]	
+                         [Palace,Hobbiton,4,N,$90.00	2003/09/22, ]	  
+       
+          
+  * 7 (specific hotel Name) AND (specific city name) 
+        -  retrieve the records which hotel name is the specific hotel name and which city name is the specific city name.
+      for example:
+          Search condition: (name=Palace) AND ( city=Smallville)
+          Search Result: [Palace,Smallville,2,Y$150.00,2005/07/27,  ]    
+
+6.Update data
+=============
+  In the GUI, only 'room' field value and 'owner' field value can be updated; the updates for 
+  other field values are not supported based on the application specification.
+  
+  The room number MUST be not greater than 8 chars;
+  The owner ID value MUST be an 8 digit number. If 'owner' field is all blanks, the record is available for sale.
+  
+  * These are the steps to allocate a record:
+    - Select the specific record on JTable view.
+    - Double click the 'room' field or 'owner' field in the record to make it focused.
+    - Fill in the room number or owner Id.
+    - Press 'Enter' to submit it or move to another record.
+    
+    If the record has been updated by other CSRs, it results in the current data record out of date.
+    Update an out-of-date record will result in popping up an exception message to reminder the CSR 
+    to refresh the data in GUI( by click 'Search' button).    
+    
+  * These are the steps to reclaim a record to re-sale:
+    - Select the specific record on JTable view.
+    - Double click the 'owner' field in the record to make it focused.
+    - remove the owner Id.
+    - Press 'Enter' to submit it or move to another record..  
+
+  Special notes:  
+    Update room number(field 'room') is very different from same operation in the owner id(field 'owner');
+    This is because room number does belong to the primary key, but owner id doesn't. Update the owner id 
+    will not change the primary key and the record number will keep same after the operation.But update 
+    room number will change the primary key,so the operation will be decomposed two consecutive operations:
+       1)Firstly,the original record will be deleted.
+       2)Then,a new record with the new room number will be inserted into data file; there is no guarantee
+         that the record number will keep same.
+  
+7.Logger Configuration
+=======================
+  The application use the Java logger component(java.util.logging.Logger).
+  The logger configuration file locates at "${JRE}/lib/logging.properties".
+  User can modify the configuration file to control logger level and logger
+  handler. The default logger level is 'INFO'.
+  
+  When file handler is configurated in this file, a default log file
+  "output.log" will be created in current working directory.
+  
+  Please Check the log configuration file for the detail.
+
+8.Notes
+========
+ * The application is a case-sensitive system. Please be care about upper case or lower case when
+    input information.
+    
+ * Current version of the application only supports to modify 'room' and 'owner' field values in records;
+    The operations, such as,insert a new record,delete a existing record or modify other field values 
+    in a existing record, are not supported on the GUI based on the application specification.
+ 
+ * Users can specify any work mode (alone,server or network) for the application when launch it; 
+    Once the application started, users can modify the configuration parameter for 
+    current work mode, but can't switch to another work mode.
+
+--End--

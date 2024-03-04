@@ -1,0 +1,27 @@
+Application Overview
+
+
+1.Background
+============
+URLyBird is a broker of discount hotel rooms. They sell accomodations for business and pleasure travellers at short notice, helping hotels to fill rooms that would otherwise be left empty. They take bookings only within 48 hours of the start of room occupancy. Curently, URLyBird sells the rooms over the phone using a team of customer service representatives (CSRs). The CSRs interact with an aging custom-written application that has been drawing increasing criticism from the CSRs. In the future, URLyBird wants to move into Internet-based marketing, and hopes to be able to accept bookings direct from customers over the web. 
+The company's IT director has decided to migrate the existing application to a Java technology based system. Initially, the system will support only the CSRs, although the hope is that this interim step will give them a starting point for migrating the system to the web. The IT director does not anticipate much reuse of the first Java technology system, but intends to use that system as a learning exercise before going on to a web based system. 
+
+The company's IT department has a data file that contains the essential information for the company, but because the data must continue to be manipulated for reports using another custom-written application, the new system must reimplement the database code from scratch without altering the data file format. 
+
+The new application, using the existing data file format, must allow the CSRs to generate a list of accomodations that match a customer's criteria. This is the project that you have been commissioned to implement. 
+
+2.Overall Architecture
+======================
+ 2.1 Major Components
+
+The main architecture of the application must be a traditional client-server system. There are three key parts:  the server-side data management system, the client-side GUI, and the network connection between the two. 
+
+  2.2 Non-Networked Mode
+  
+The program must be able to work in a non-networked mode. In this mode, the database and GUI must run in the same VM and must perform no networking, must not use loopback networking, and must not involve the serialization of any objects when communicating between the GUI and database elements. 
+The operating mode is selected using the single command line argument that is permitted. Architecturally, this mode must use the database and GUI from the networked form, but must not use the network server code at all. 
+
+  2.3 Network Communication Approach
+You have a choice regarding the network connection protocol. You must use either serialized objects over a simple socket connection, or RMI.  Both options are equally acceptable.  Keep in mind that networking must be entirely bypassed in the non-networked mode. 
+
+End.

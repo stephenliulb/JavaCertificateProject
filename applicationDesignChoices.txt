@@ -1,0 +1,425 @@
+--------------------------------------------------------------------------
+                          Design Choices
+                                 Author: Stephen Liu
+                                 Date: 2024/02/01
+--------------------------------------------------------------------------
+This document describes the significant design choices when developing new
+URLyBird database application.
+
+
+--------------------------------------------------------------------------
+Table of Contents
+
+1. Design assumptions
+2. MVC(Model-View-Controller) pattern applied in GUI design
+3. DAO(Data Access Object) pattern applied to hide the underlying data 
+   persistent mechanism
+4. GOF Interpreter pattern and composite pattern to make search conditions
+   flexible
+5. Three layers architecture design for database system 
+6. Add new field 'room' to database schema as well as keep the data file 
+   back-compatibility
+7. Prevent update loss by database lock mechanism
+8. Deadlock detect and release
+9. Database transaction and roll back
+10.Logger system is introduced for easy troubleshooting
+--------------------------------------------------------------------------
+
+1.Design assumptions 
+==========================================================================
+
+  - Data volume is not huge
+  	URLyBird is a broker of discount hotel rooms. Each data record 
+  	represents one specific hotel room in one specific city. Therefore, 
+  	the amount of data records will has same order of magnitude of hotel 
+  	rooms number in the country; From the view of the reality, the number 
+  	of data records should be less than 1 million.
+    
+    To simplify the design based on this point, when users search the data 
+    for all records, ALL data records will be loaded into memory in ONE 
+    database transaction instead of more design methods,such as paging the 
+    search result set.
+    
+  - database performance is not main concern
+    The new database application will be used for CSRs to retrieve and 
+    update data ecords in database; The database system supports multiple 
+    CSRs concurrently to access database. From the background of URLyBird 
+    company, it is not a huge company;it should be reasonable to make a 
+    assumption that the number of CSRs should be less than 100.  In this 
+    scenario,so it makes sense to think the database performance will 
+	  be not an major concern for maximum concurrent 100 CSRs. So the system
+	  performance has not been carefully measured and specially tuned in 
+	  this implementation.
+    
+2.MVC(Model-View-Controller) pattern in GUI design
+==========================================================================
+
+  *Problems
+    Current GUI is very simple and basic according to the specification.
+    After CSRs begin to use it,it is expected that more enhancement 
+    requirements will be raised to make the GUI more convenient and 
+    informative. To quickly response to potential requirements and 
+    minimize the work effort, the GUI design should be very flexible to
+    support future extension and  easily refactoring of client GUI.
+
+  *Issues
+   - Support different views of same data model.
+   - Each view can independently operate on the database.
+   - Synchronize the data in views with the database.
+
+  *Judgment&Decision
+    MVC(Model-View-Controller) pattern provides a effective solution for 
+    these issues. The pattern is composed of data model,view model and 
+    controller model. 
+    
+    Different view models are different representations of same data set. 
+    Different view models can be very different and can be adjusted 
+    individually, but they won't affect data model.
+    
+    The data model provides data set for all the views. It can also accept
+    the update from views and propagates the changes to the controller 
+    model and the database.
+    
+    controller model accepts all user requests and drives the whole 
+    request process flow,and at last updates views to reflect processed
+    result; Controller model also help to propagates the changes between
+    the data model and different views.
+    
+    MVC pattern modularizes application functions and greatly increase the
+    flexibility of the design.
+  
+3.DAO(Data Access Object) pattern to hide the underlying data persistance 
+  mechanism
+==========================================================================
+
+  *Problems
+    Current data persistance mechanism is based on data file which can 
+    locate in local site or remote site. As URLyBird business grows, the 
+    data volume and data complexity will increase;it is possible to use 
+    real database solution instead of data file solution to improve the 
+    flexibility of data management and the efficiency of data operation. 
+    The changes of data persistance location (local,or remote) and the 
+    changes of data persistance type(file,RDBMS) should have minimal 
+    affect to upper  business application.
+
+  *Issues
+   - Data persistance location(remote site or local site) should be 
+     transparent to upper layer application.
+   - Data persistance type (data file or RDBMS) should be transparent 
+     to upper layer application.
+
+  *Judgment&Decision
+    DAO(Data Access Object) pattern is great to address these issues. 
+    DAO API has effectively isolate business logic from data persistance
+    layer. Any access to data will go through DAO API;DAO API also do 
+    automatically mapping between data objects and data records in 
+    database.This will simplify application design and coding.
+
+	Dao object can configurated by local DBProxy or remote DBProxy.
+	   - Local DBProxy,which will directly delegate the operation to 
+	     underlying database server(DBMain object).
+     - Remote DBProxy,which will serialize the DB commands,transmit 
+       them to remote database,and then receive the result or exceptions 
+       from remote database;
+    
+    These two kinds of DBProxys are inherited from same parent class
+    (DBProxy).It makes database location be transparent to upper 
+    layer. To support different type of data persistance mechanism,
+    each different persistance type will inherit from same DAO interface
+    and have their own implementation. It will make database type be 
+    transparent to application.
+    
+    DAO pattern greatly improves design flexibility and simplifies code.
+  
+4. GOF Interpreter pattern and composite pattern to make search conditions
+   flexible
+==========================================================================
+
+  *Problems
+    Currently the application specification just requires searching the 
+    data based on two fields 'name' and 'location'. It is not enough for 
+    a normal commercial business application. The GUI should search data 
+    by flexible search conditions, such as special price, specific size 
+    of room, specific smoking flag etc. or their combination.
+
+  *Issues
+    - Flexibly search data for any specific fields in database.
+    - Easily extend to support different logic comparison operators(
+      LESSTHAN,GREATTHAN,NOTEQUAL etc.)as well as normal equivalent 
+      comparison operator.
+    - All fields comparison operators should be flexibly combined by logic 
+      AND operator or logic OR operator to form complex searching 
+      conditions to satisfy user different requirements.
+
+  *Judgment&Decision
+    A set of basic data comparison operators are defined(such as EQUAL,
+    LESSTHAN,GREATTHAN,AND,OR etc.) to set up basic searching language. 
+    Logic 'AND' operator and logic 'OR' operator are used to combine these 
+    basic data comparison operators to generate complex searching 
+    condition. for example: Searching condition 
+       "[[name EQUAL 'castle']OR[location EQUAL 'Smallville']]" 
+    will retrieve all  records which name is equal to 'castle' or location
+    is 'Smallville'.  
+    
+    All the logic operators inherit from same interface 'Spec' to use the 
+    advantage of Composite Pattern. According to the composite pattern,
+    the basic data comparison operators are leaf nodes and 'AND'/'OR' 
+    operators are composite nodes, all of them will have same interface.
+    From the root 'Spec' object, complex searching criteria  can be 
+    automatically generated. 
+
+5.Three layers architecture for database system design
+==========================================================================
+
+  *Problems
+    Even though simple database system, it still faces a lot of problems,
+    such as concurrency,transaction,deadlock,unique primary key,search 
+    performance etc. There also exists different views of data. From the 
+    view of business,it emphasizes data record primary key uniqueness,
+    concurrency control; For the view of physical storage,it emphasizes 
+    where the records are stored and storage format. How to address these 
+    problems and make database system simple and easily maintain is not 
+    easy.
+    
+  *Issues
+    - Seperate physical view and business view to data.
+    - Support concurrent control mechanism on the database.
+    - Guarantee primary key unique.
+    - Improve search performance.
+  
+  *Judgment&Decision
+  	Using layer architecture pattern will simplify the database system
+  	design.Basically the implemented database system is divided into 
+  	three layers:
+  	   - Storage Layer (database physical file)
+  	     The layer will describe data storage format and keep the real 
+  	     data. In this system, it refer to the database data file.
+  	     
+  	   - Physical Layer (package stephen.db.file)
+  	     This layer encapsulates basic file IO operations to provide 
+  	     higher level interfaces to directly access records in database.
+  	     It provides lower level synchronization  mechanism to guarantee
+  	     concurrent access to the database file. In this layer, record 
+  	     number is unique for each record. To improve IO efficiency, 
+  	     a block of data records(multiple records) can be read in one 
+  	     IO operation.
+  	   
+  	   - Logical Layer (package stephen.db)
+  		 This layer provides high level features to database system.
+  		 It provides business view to the data. The primary key is the 
+  		 combination of different fields(such as 'name', room and 'location'
+  		 ), which is more meaningful from the view of business model as 
+  		 opposed to physical record number. In this layer,the lock mechanism
+  		 is provided to support concurrent access to data; also database 
+  		 transaction mechanism and deadlock detection are implemented in 
+  		 this layer. To improve search performance, data record index are 
+  		 created and maintained in memory.
+  
+    The layer design in database system makes the system structure tidy 
+    and very organized.Different functions are isolated but support each 
+    other; it makes the system easily maintain. 
+
+6.Add new field 'room' to database schema as well as keep the data file
+ back-compatibility
+==========================================================================
+   *Problems
+    URLyBird is a broker of discount hotel "rooms", but database schema 
+    misses the field related to room number. If no room numbers, how will 
+    CSRs book  discount rooms for customers? 
+   
+   *Issues
+    - Miss room number information in database schema.
+    - Keep data file format back compatibility when adding room number     
+      into database schema.
+    
+   *Judgment&Decision
+   	 Room number is string type, and normally less than 8 bytes. From 
+   	 the view of business,the primary key of database schema is the 
+   	 combination of 'name','room' and 'location'.
+	
+	 But current data file must continue to be manipulated for reports 
+	 using another custom-written application. When added new field 'room' 
+	 into the database schema and saved into data file, it shouldn't 
+	 alter the data file schema. it is the key point of keeping the 
+	 back-compatibility.
+	 
+	 The solution is as following: 
+	    - Stealing last 8 bytes in the field 'name'(hotel name) as the 
+	      place to store room number information.
+	    - Don't change current data file schema to keep back-compatibility.
+	    - Use a different file schema(including the field 'room') to parse 
+	      record data in the application. This enhanced file schema will 
+	      find the room number information hiding in the field 'name' and 
+	      provides the data to database schema where primary key is the 
+	      combination of 'name','room' and 'location'.
+	 
+	 At last,the new database application provides a chance to let CSRs 
+	 fill in room number to book correct room for a specific customer on 
+	 the GUI. 
+    
+7.Prevent update loss by database lock mechanism
+==========================================================================
+
+  *Problems
+    When multiple CSRs concurrently access same database,It is highly 
+    possible that they happen to update same data record in database and
+    don't notice these concurrent updates from other users. It results 
+    in only the last update is reserved and previous updates are lost 
+    and a single room is allocated to multiple customers.
+ 	   
+  *Issues
+    - Prevents update loss under concurrency access to database; one 
+      record must be allocated to only one user.
+ 
+  *Judgment&Decision
+    Each CSR should work independently and transparently. Database lock 
+    mechanism helps to solve these issues. 
+     
+    When a CSR tries to book one record , the following procedures are 
+    designed to prevent update loss:
+        - Lock the record which they want to book.
+        - Search the latest value of this record in the database.
+        - Compare the latest record value in database with the original 
+          record value in client GUI.If (latest record value == original 
+          record value),it means that the record hasn't been booked by 
+          other users; so it is safe to check in the new value of the 
+          record.
+          
+          If (latest record value != original record value), it means 
+          that the record has been booked by other users and local data
+          on the GUI doesn't sync up with database and it will result 
+          update loss if continue to book the record. So the operation 
+          has to be terminated and the current CSR will be notified to 
+          refresh their GUI to reflect latest data in the database.
+          
+        - Unlock the record.
+
+8. Deadlock detect and release
+==========================================================================
+ *Problems
+  	In theory,when client applications manipulate database, they should 
+  	first lock the record, then do some changes on it, at last unlock 
+  	the record. There is some scenarios that will result in dead lock:
+  	 
+  	- Scenario1:
+  	  One client application want to update record 'A' and record 'B' at
+  	  same time, So it locked record 'A' first and then try to lock record
+  	  'B'; but another client application try to update record B and 
+  	  record 'A' at same time, this application locked record 'B' and try
+  	  to lock record 'A'. They will wait infinitely.
+  	
+  	- Scenario2:
+  	   One client application launched a thread to update a record. This
+  	   thread just locked the record then crashed,it has no chance to 
+  	   unlock the record. Any other application attempting to lock this 
+  	   record will wait infinitely due to the lock on the record will 
+  	   never be released.
+  	   
+  	Database server should have a mechanism to detect and release 
+  	deadlock.When the deadlock is released, partial changes on the record 
+  	must be rolled back,otherwise these changes will damage the data 
+  	consistency in database. 	
+ 
+ *Issues  
+   - Database server should detect the deadlock and release deadlock.
+   - Database server should keep data consistency after release deadlock.
+ 
+ *Judgment&Decision
+ 	The simply way to detect the deadlock is to set a timeout period for 
+ 	each record lock. When the timeout for a record lock arrives, database
+ 	server decides it is a deadlock,then roll back and release the deadlock.
+ 	
+ 	There is more detail in design choices of database transaction and roll 
+ 	back.
+ 	
+ 9. Database transaction and roll back
+==========================================================================
+ *Problems
+   When deadlock happens in database, database server will release the 
+   deadlock.Deadlock itself means client application hasn't finished all 
+   their changes on database; these partial changes will make data 
+   inconsistent in database.
+   
+   Another scenario, If one user locked one record and is updating this 
+   record, at this time, another concurrent user connects to the database
+   server (by different database connection)and  directly updates the 
+   record instead of firstly lock the record. It will result in make the 
+   data insecure and data loss in database if database server can't  
+   prevent this scenario.     
+   
+ *Issues
+   - All writable database operations should be in transaction; When 
+   exception occurs,all partial changes should be rolled back to make 
+   data be consistent.
+   - Data in database should be secure and predictable.
+ 
+ *Judgment&Decision    
+    Basically, Transaction environment will isolate concurrent database 
+    application from modifying same record at same time. So different 
+    database connections will belong to different transactions; and 
+    different database record number will belong to different 
+    transactions. Transaction environment should include database 
+    connection information and database record number and should build
+    on lock mechanism to makes different transaction environments be 
+    exclusive each other.
+ 	 
+ 	The normal life cycle of a transaction environment for a specific 
+ 	record within one database connection is composed as the following
+ 	stages:
+      - Create
+        lock operation is executed to create the transaction environment.
+      - Operations
+        multiple database operations are executed within the transaction 
+        environment.
+      - Destroy
+        unlock operation is executed and release the transaction 
+        environment.
+        
+    There are several exception scenarios resulting in database roll back
+    and destroy the transaction environment:
+      - database connection is reset by peer
+      - deadlock is detected
+      - any exception during processing the database command.    
+
+ 	All single writable database operations(such as update(),delete() etc.) 
+ 	should firstly check if their transaction environment exists or not 
+ 	before continue. If there is a transaction environment around this 
+ 	record,it should further check if the transaction environment is created
+ 	from the database connection same as current operation; if they are same
+ 	,it is safe to continue , otherwise, current operation should terminate.
+ 	
+ 	Another important part of transaction is about roll back. To make the 
+ 	changed data easily roll back in case any exception occurred, all 
+ 	changed data should cache into memory instead of directly save into data
+ 	store; To save these cached data changes into data store will be 
+ 	deferred to the point when the transaction environment is released; 
+ 	Any exception	occurs before this point will result in the cached changes
+ 	to record are	completely	removed instead of save into data store. 
+    
+10. Logger system is introduced for easy troubleshooting
+==========================================================================
+
+  *Problems
+	Logging mechanism is necessary for almost any application system. 
+	Logging information will be used to monitor application status and do 
+	the troubleshooting. Logging information has different log level; the 
+	log level should be configurated. What's more,The output of logging 
+	information should be easily redirected to different destination such
+	as,flat files	or console.
+ 	   
+  *Issues
+    - Logging level should be configurable.
+  	- Output of Logging information can configurate to be redirected 
+  	  to flat files as well as console.
+  
+  *Judgment&Decision
+    java.util.logging.Logger package provides very good solution to 
+    address the above issues. Its configuration file 'logging.properties'
+    locates at JAVA directory(${Current_JRE}/lib/logging.properties). 
+    Logger handlers and logging level can be customized  from this file. 
+    
+    When file handler is configurated in this file, a default log file
+    "output.log" will be created in current working directory. It will be 
+    helpful to do trouble shooting.
+ 	
+--End--
